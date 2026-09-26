@@ -1,0 +1,4 @@
+.env
+blocked.json
+__pycache__/
+.venv/
