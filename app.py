@@ -50,7 +50,7 @@ app = FastAPI(title="Sagemcom Control")
 @app.get("/api/devices")
 def devices():
     r = rw()
-    entries = r.get_filters()                      # [(nombre, mac)] bloqueados
+    entries, _ = r.get_filters()                # [(nombre, mac)] bloqueados
     blocked = {m: n for n, m in entries}
     live = scan_devices(HOST)                      # {mac: ip}
     custom = load_names()
@@ -84,10 +84,10 @@ def set_name(mac: str, payload: dict):
 def block(mac: str):
     mac = norm_mac(mac)
     r = rw()
-    entries = r.get_filters()
+    entries, page_key = r.get_filters()
     if mac not in [m for _, m in entries]:
         entries.append((mac, mac))
-        r.set_filters(entries)
+        r.set_filters(entries, page_key)
     return {"mac": mac, "blocked": True}
 
 
@@ -95,8 +95,9 @@ def block(mac: str):
 def unblock(mac: str):
     mac = norm_mac(mac)
     r = rw()
-    entries = [(n, m) for n, m in r.get_filters() if m != mac]
-    r.set_filters(entries)
+    entries, page_key = r.get_filters()
+    entries = [(n, m) for n, m in entries if m != mac]
+    r.set_filters(entries, page_key)
     return {"mac": mac, "blocked": False}
 
 

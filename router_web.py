@@ -105,11 +105,13 @@ class RouterWeb:
             m = re.search(r'value="([^"]*)"[^>]*name="%s"' % re.escape(name), html)
         return m.group(1) if m else ""
 
-    def get_filters(self) -> list:
-        """Devuelve [(nombre, mac)] de la lista de filtrado (modo denegar)."""
-        r = self._req("GET", self._go("/Wifi_MAC_Filter.asp?m=54"))
+    def get_filters(self) -> tuple:
+        """Devuelve ([(nombre, mac)], page_key) de la lista de filtrado."""
+        url = self._go("/Wifi_MAC_Filter.asp?m=54")
+        r = self._req("GET", url)
         r.raise_for_status()
         html = r.text
+        page_key = self._page_key(html) or self.session_key
         idxs = sorted({int(m.group(1))
                        for m in re.finditer(r'name="Wifi_Filter_name_(\d+)"', html)})
         entries = []
@@ -119,10 +121,11 @@ class RouterWeb:
             if any(octs):
                 mac = norm_mac(":".join(octs))
                 entries.append((name.strip() or mac, mac))
-        return entries
+        return entries, page_key
 
-    def set_filters(self, entries: list) -> bool:
+    def set_filters(self, entries: list, page_key: str = None) -> bool:
         """Reescribe la lista completa en modo DENEGAR. entries=[(nombre, mac)]."""
+        key = page_key or self.session_key
         data = {
             "ResetApply": "0",
             "WifiMACFilteringEnable": "1",
@@ -134,8 +137,9 @@ class RouterWeb:
             data[f"Wifi_Filter_name_{i}"] = name or mac
             for n, o in enumerate(octs, 1):
                 data[f"mac_{n:02d}_{i}"] = o
-        r = self._req("POST", self._go("/goform/Wifi_MAC_Filter"),
-                      data=data, allow_redirects=True)
+        url = f"{self.base}/goform/Wifi_MAC_Filter?sessionKey={key}"
+        r = self._req("POST", url, data=data, allow_redirects=True,
+                      headers={"Referer": self._go("/Wifi_MAC_Filter.asp?m=54")})
         r.raise_for_status()
         return True
 
