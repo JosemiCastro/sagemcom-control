@@ -1,5 +1,6 @@
 """Importa una sesion del navegador y vuelca la pagina del filtro MAC."""
 import os
+import re
 import sys
 
 from dotenv import load_dotenv
@@ -23,7 +24,16 @@ print("OK sesion importada")
 
 html = tp.get_page("WlanMacFilterRpm.htm")
 print("pagina:", len(html), "bytes")
-open("/tmp/wlanmacfilter.htm", "w", encoding="utf-8", errors="replace").write(html)
+
+print("=== campos del formulario ===")
+for m in re.finditer(r'<input[^>]*name="([^"]+)"[^>]*>', html):
+    tag = m.group(0)
+    val = re.search(r'value="([^"]*)"', tag)
+    print(f"  {m.group(1)} = {(val.group(1) if val else '')[:60]}")
+for m in re.finditer(r'<select[^>]*name="([^"]+)"', html):
+    print(f"  [select] {m.group(1)}")
+
+print("=== variables cifradas ===")
 
 varlist = tp.encrypted_vars(html)
 for name, val in varlist.items():
