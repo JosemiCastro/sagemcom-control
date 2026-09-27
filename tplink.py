@@ -1,0 +1,128 @@
+"""Cliente para TP-Link TL-WR940N v6.
+
+La web de este firmware cifra todo (login y formularios):
+  AES-128-CBC/PKCS7 para los datos  +  RSA-512/PKCS#1 v1.5 para la firma.
+Esquema revertido de tpEncrypt.js / encrypt.js / login.htm del propio router.
+"""
+import base64
+import hashlib
+import json
+import random
+import re
+import time
+import urllib.parse
+
+import requests
+from Crypto.Cipher import AES, PKCS1_v1_5
+from Crypto.PublicKey import RSA
+
+
+class TPLinkWeb:
+    def __init__(self, host, user="admin", password="admin"):
+        self.host = host
+        self.user = user
+        self.password = password
+        self.s = requests.Session()
+        self.s.headers["User-Agent"] = "Mozilla/5.0"
+        self.aes_key = None
+        self.aes_iv = None
+        self.hash = None
+        self.seq = None
+        self.rsa = None
+        self.session_id = None
+
+    # ---------------- crypto ----------------
+    def _gen_aes_key(self):
+        base = str(int(time.time() * 1000)) + str(random.random() * 1000000000)
+        self.aes_key = base[:16]
+        base = str(int(time.time() * 1000)) + str(random.random() * 1000000000)
+        self.aes_iv = base[:16]
+
+    def _aes_encrypt(self, plaintext: str) -> str:
+        data = plaintext.encode("utf-8")
+        pad = 16 - (len(data) % 16)
+        data += bytes([pad]) * pad
+        c = AES.new(self.aes_key.encode(), AES.MODE_CBC, self.aes_iv.encode())
+        return base64.b64encode(c.encrypt(data)).decode()
+
+    def _aes_decrypt(self, b64: str) -> str:
+        c = AES.new(self.aes_key.encode(), AES.MODE_CBC, self.aes_iv.encode())
+        data = c.decrypt(base64.b64decode(b64))
+        return data[:-data[-1]].decode("utf-8")
+
+    def _rsa_sign(self, s: str) -> str:
+        cipher = PKCS1_v1_5.new(self.rsa)
+        out = []
+        for i in range(0, len(s), 53):
+            chunk = s[i:i + 53].encode()
+            out.append(cipher.encrypt(chunk).hex().rjust(128, "0"))
+        return "".join(out)
+
+    def _data_encrypt(self, data: str, is_login=False):
+        enc = self._aes_encrypt(data)
+        seq = self.seq + len(enc)
+        if is_login:
+            s = f"key={self.aes_key}&iv={self.aes_iv}&h={self.hash}&s={seq}"
+        else:
+            s = f"h={self.hash}&s={seq}"
+        return {"sign": self._rsa_sign(s), "data": enc}
+
+    # ---------------- sesion ----------------
+    def login(self):
+        r = self.s.get(f"http://{self.host}/login/getRsa.json", timeout=10)
+        info = r.json()
+        nn, mm = info["rsa"]["nn"], info["rsa"]["mm"]
+        self.seq = int(info["seq"])
+        self.rsa = RSA.construct((int(nn, 16), int(mm, 16)))
+        self._gen_aes_key()
+        self.hash = hashlib.md5((self.user + self.password).encode()).hexdigest()
+        data = json.dumps({"name": self.user, "password": self.password})
+        payload = self._data_encrypt(data, is_login=True)
+        body = "JSONDATA: " + json.dumps(payload) + "\n"
+        r = self.s.post(
+            f"http://{self.host}/login/login.json",
+            data=body,
+            headers={"Content-Type": "application/json; charset=UTF-8"},
+            timeout=10,
+        )
+        ret = r.json()
+        if not ret.get("valid"):
+            raise RuntimeError(f"login TP-Link fallido: {ret}")
+        self.session_id = ret["sessionId"]
+        self.s.cookies.set("Authorization", str(self.seq),
+                           domain=self.host, path="/")
+        return True
+
+    def _url(self, page):
+        return f"http://{self.host}/{self.session_id}/userRpm/{page}"
+
+    def get_page(self, page):
+        r = self.s.get(self._url(page), timeout=15)
+        r.raise_for_status()
+        return r.text
+
+    def post_form(self, page, fields: dict):
+        """Envia un formulario cifrado como lo hace la web (multipart, campo data)."""
+        plain = "&".join(
+            f"{k}={urllib.parse.quote(str(v), safe='')}"
+            for k, v in fields.items()
+        )
+        payload = self._data_encrypt(plain)
+        r = self.s.post(self._url(page),
+                        files={"data": (None, json.dumps(payload))},
+                        timeout=15)
+        return r
+
+    def encrypted_vars(self, html):
+        """Extrae y descifra las variables name=encryptedData de una pagina."""
+        out = {}
+        for m in re.finditer(
+            r'data-name="([^"]+)"[^>]*>\s*var\s+\1\s*=\s*"([^"]*)"',
+            html,
+        ):
+            name, enc = m.group(1), m.group(2)
+            try:
+                out[name] = self._aes_decrypt(enc)
+            except Exception as e:  # noqa: BLE001
+                out[name] = f"<error: {e}>"
+        return out
