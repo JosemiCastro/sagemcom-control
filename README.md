@@ -110,6 +110,20 @@ dejar de pillarlos. Desactívalo para tu wifi en cada teléfono:
 - **Android**: Ajustes → Wi-Fi → tu red → "Tipo de MAC" →
   "MAC del dispositivo".
 
+## Tecnologías
+
+- **Python 3.11+**
+- **FastAPI** — API y servidor web de la app
+- **Uvicorn** — servidor ASGI
+- **requests** — comunicación HTTP con las webs de los routers
+- **PyCryptodome** — cifrado AES-128-CBC para hablar con el TP-Link
+  (ingeniería inversa de su `tpEncrypt.js`)
+- **python-dotenv** — configuración en `.env`
+- **HTML/CSS/JS** (vanilla, sin frameworks) — interfaz responsive,
+  servida inline desde `app.py`
+- **ThreadPoolExecutor** — barrido ping paralelo para descubrir
+  dispositivos
+
 ## Docker (opcional)
 
 ```bash
