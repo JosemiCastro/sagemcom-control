@@ -10,8 +10,10 @@ lo que hace el navegador:
                 WifiMACNumFilters=N, Wifi_Filter_name_I, mac_01_I..mac_06_I)
 """
 import os
+import random
 import re
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -36,19 +38,47 @@ class RouterWeb:
         self.session_key = None
 
     # ---------- login ----------
+    def _req(self, method, url, **kwargs):
+        """Petición con reintentos: el servidor del router a veces corta conexiones."""
+        last = None
+        for i in range(4):
+            try:
+                r = self.s.request(method, url, timeout=self.timeout, **kwargs)
+                return r
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.ChunkedEncodingError) as e:
+                last = e
+                time.sleep(0.7 * (i + 1))
+        raise RuntimeError(f"El router no responde tras varios intentos: {last}")
+
+    def _page_key(self, html: str):
+        """Busca un sessionKey pre-login en el HTML de la página de entrada."""
+        for pat in (r"sessionKey=(\d+)", r"sessionKey[\"']?\s*[:=]\s*[\"']?(\d+)",
+                    r"var\s+sessionKey\s*=\s*[\"']?(\d+)"):
+            m = re.search(pat, html or "")
+            if m:
+                return m.group(1)
+        return None
+
     def login(self) -> str:
-        r = self.s.post(
-            self.base + "/goform/login",
+        # 1. La página de login ya trae (o no) un sessionKey previo
+        r = self._req("GET", self.base + "/login.asp")
+        pre_key = self._page_key(r.text) or str(random.randint(100000000, 999999999))
+
+        # 2. POST de credenciales con ese sessionKey
+        r = self._req(
+            "POST", f"{self.base}/goform/login?sessionKey={pre_key}",
             data={"loginUsername": self.user,
                   "loginPassword": self.password,
                   "loginpage_flag": ""},
-            timeout=self.timeout,
             allow_redirects=True,
         )
-        key = self._extract_key(r)
-        if not key:
+        key = self._extract_key(r) or pre_key
+        # 3. Verificar que la sesión es válida pidiendo una página protegida
+        probe = self._req("GET", f"{self.base}/Overview.asp?sessionKey={key}")
+        if "login.asp" in (probe.url or "") or 'name="login"' in (probe.text or ""):
             raise RuntimeError(
-                "Login fallido: no se obtuvo sessionKey. "
+                "Login fallido: el router no aceptó las credenciales. "
                 "Revisa ROUTER_USER y ROUTER_PASS en el .env")
         self.session_key = key
         return key
@@ -77,7 +107,7 @@ class RouterWeb:
 
     def get_filters(self) -> list:
         """Devuelve [(nombre, mac)] de la lista de filtrado (modo denegar)."""
-        r = self.s.get(self._go("/Wifi_MAC_Filter.asp?m=54"), timeout=self.timeout)
+        r = self._req("GET", self._go("/Wifi_MAC_Filter.asp?m=54"))
         r.raise_for_status()
         html = r.text
         idxs = sorted({int(m.group(1))
@@ -104,8 +134,8 @@ class RouterWeb:
             data[f"Wifi_Filter_name_{i}"] = name or mac
             for n, o in enumerate(octs, 1):
                 data[f"mac_{n:02d}_{i}"] = o
-        r = self.s.post(self._go("/goform/Wifi_MAC_Filter"), data=data,
-                        timeout=self.timeout, allow_redirects=True)
+        r = self._req("POST", self._go("/goform/Wifi_MAC_Filter"),
+                      data=data, allow_redirects=True)
         r.raise_for_status()
         return True
 
