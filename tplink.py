@@ -24,6 +24,7 @@ class TPLinkWeb:
         self.password = password
         self.s = requests.Session()
         self.s.headers["User-Agent"] = "Mozilla/5.0"
+        self.s.headers["Referer"] = f"http://{host}/"
         self.aes_key = None
         self.aes_iv = None
         self.hash = None
