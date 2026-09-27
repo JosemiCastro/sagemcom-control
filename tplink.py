@@ -93,9 +93,16 @@ class TPLinkWeb:
             headers={"Content-Type": "application/json; charset=UTF-8"},
             timeout=10,
         )
-        ret = r.json()
-        if not ret.get("valid"):
-            raise RuntimeError(f"login TP-Link fallido: {ret}")
+        ret = None
+        try:
+            ret = r.json()
+        except Exception:
+            pass
+        if not isinstance(ret, dict) or not ret.get("valid"):
+            raise RuntimeError(
+                f"login TP-Link fallido: HTTP {r.status_code}, "
+                f"cuerpo={r.text[:200]!r}"
+            )
         self.session_id = ret["sessionId"]
         self.s.cookies.set("Authorization", str(self.seq),
                            domain=self.host, path="/")
