@@ -273,4 +273,7 @@ class TPLinkWeb:
         }
         r = self.post_form("WlanMacFilterRpm.htm", fields)
         print("DEBUG post alta:", r.status_code, len(r.text))
+        with open("wlanmacadd_resp.htm", "w", encoding="utf-8",
+                  errors="replace") as f:
+            f.write(r.text)
         return self.get_mac_filter()
