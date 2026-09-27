@@ -254,6 +254,7 @@ class TPLinkWeb:
         # El router precarga wlanFilterAdvPara con los valores del formulario;
         # SelIndex indica donde va la entrada nueva (no tocarlo).
         para = self.encrypted_vars(html).get("wlanFilterAdvPara", [])
+        print("DEBUG para:", para)
 
         def p(i, default=""):
             return str(para[i]) if len(para) > i else default
