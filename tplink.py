@@ -222,9 +222,10 @@ class TPLinkWeb:
     def mac_filter_action(self, query):
         """Ejecuta una accion del filtro (Del, DoAll, Enfilter...).
 
-        query: ej. "Page=1&Del=0&vapIdx=1". Devuelve el filtro actualizado.
+        query: dict, ej. {"Page": 1, "Del": 0, "vapIdx": 1}.
+        Devuelve el filtro actualizado.
         """
-        self.post_encrypted("WlanMacFilterRpm.htm", query)
+        self.post_form("WlanMacFilterRpm.htm", query)
         return self.get_mac_filter()
 
     def set_mac_block(self, mac, block=True, desc=""):
@@ -235,7 +236,8 @@ class TPLinkWeb:
         if entry:
             if entry["enabled"] == block:
                 return f  # ya esta como se pide
-            self.mac_filter_action(f"Page=1&Del={entry['id']}&vapIdx=1")
+            self.mac_filter_action(
+                {"Page": 1, "Del": entry["id"], "vapIdx": 1})
             if block:
                 return self.add_mac_entry(mac, desc or entry["desc"])
             return self.get_mac_filter()
@@ -246,8 +248,9 @@ class TPLinkWeb:
     def add_mac_entry(self, mac, desc=""):
         """Crea una entrada en el filtro (habilitada)."""
         mac = mac.upper().replace(":", "-")
-        html = self.post_encrypted(
-            "WlanMacFilterRpm.htm", "Add=Add&Page=1&vapIdx=1").text
+        html = self.post_form(
+            "WlanMacFilterRpm.htm",
+            {"Add": "Add", "Page": 1, "vapIdx": 1}).text
         names = re.findall(r'name="([^"]+)"', html)
         fields = {}
         for n in dict.fromkeys(names):
@@ -266,6 +269,5 @@ class TPLinkWeb:
             fields["Changed"] = "1"
         if "Save" not in fields:
             fields["Save"] = "Save"
-        query = urllib.parse.urlencode(fields)
-        self.post_encrypted("WlanMacFilterRpm.htm", query)
+        self.post_form("WlanMacFilterRpm.htm", fields)
         return self.get_mac_filter()
