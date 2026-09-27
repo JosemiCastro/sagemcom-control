@@ -156,6 +156,25 @@ class TPLinkWeb:
                         timeout=15)
         return r
 
+    def _parse_array(self, text):
+        """Convierte 'var x = new Array(1,"a",...);' en lista Python."""
+        m = re.search(r"new Array\((.*)\)", text, re.S)
+        if not m:
+            return text
+        items = []
+        for part in m.group(1).split(","):
+            part = part.strip()
+            if len(part) >= 2 and part[0] == '"' and part[-1] == '"':
+                items.append(part[1:-1])
+            elif part.lstrip("-").isdigit():
+                items.append(int(part))
+            else:
+                try:
+                    items.append(float(part))
+                except ValueError:
+                    items.append(part)
+        return items
+
     def encrypted_vars(self, html):
         """Extrae y descifra las variables name=encryptedData de una pagina."""
         out = {}
@@ -165,7 +184,7 @@ class TPLinkWeb:
         ):
             name, enc = m.group(1), m.group(2)
             try:
-                out[name] = self._aes_decrypt(enc)
+                out[name] = self._parse_array(self._aes_decrypt(enc))
             except Exception as e:  # noqa: BLE001
                 out[name] = f"<error: {e}>"
         return out
@@ -179,7 +198,7 @@ class TPLinkWeb:
         """
         html = self.get_page("WlanMacFilterRpm.htm")
         varlist = self.encrypted_vars(html)
-        para = [int(x) for x in varlist.get("wlanFilterPara", [])]
+        para = varlist.get("wlanFilterPara", [])
         raw = varlist.get("wlanFilterList", [])
         stride = para[6] if len(para) > 6 else 5
         n = para[5] if len(para) > 5 else 0
