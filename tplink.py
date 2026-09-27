@@ -271,5 +271,6 @@ class TPLinkWeb:
             "vapIdx": p(8, "1"),
             "Save": "Save",
         }
-        self.post_form("WlanMacFilterRpm.htm", fields)
+        r = self.post_form("WlanMacFilterRpm.htm", fields)
+        print("DEBUG post alta:", r.status_code, len(r.text))
         return self.get_mac_filter()
