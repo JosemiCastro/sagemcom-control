@@ -124,6 +124,11 @@ def block(mac: str):
     if mac not in [m for _, m in entries]:
         entries.append((mac, mac))
         r.set_filters(entries, page_key)
+    # Tambien en el TP-Link, por si el dispositivo cambia de wifi
+    try:
+        tp().set_mac_block(mac, block=True)
+    except HTTPException:
+        pass
     return {"mac": mac, "blocked": True}
 
 
@@ -134,6 +139,10 @@ def unblock(mac: str):
     entries, page_key = r.get_filters()
     entries = [(n, m) for n, m in entries if m != mac]
     r.set_filters(entries, page_key)
+    try:
+        tp().set_mac_block(mac, block=False)
+    except HTTPException:
+        pass
     return {"mac": mac, "blocked": False}
 
 
