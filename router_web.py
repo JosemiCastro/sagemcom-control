@@ -146,8 +146,7 @@ class RouterWeb:
 
 # ---------- descubrimiento de dispositivos en la LAN ----------
 def scan_devices(host: str) -> dict:
-    """Ping sweep rápido + tabla ARP -> {mac: (ip, hostname)} de equipos visibles."""
-    import socket
+    """Ping sweep rápido + tabla ARP -> {mac: ip} de equipos visibles."""
     base = host.rsplit(".", 1)[0]
     ping_base = (["ping", "-n", "1", "-w", "400"] if os.name == "nt"
                  else ["ping", "-c", "1", "-W", "1"])
@@ -173,11 +172,5 @@ def scan_devices(host: str) -> dict:
         if m and m.group(1).startswith(base + "."):
             mac = norm_mac(m.group(2))
             if mac and not mac.startswith("FF:FF"):
-                ip = m.group(1)
-                hostname = ""
-                try:
-                    hostname = socket.gethostbyaddr(ip)[0].split(".")[0]
-                except Exception:
-                    pass
-                devices[mac] = (ip, hostname)
+                devices[mac] = m.group(1)
     return devices

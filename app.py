@@ -75,12 +75,12 @@ def devices():
     r = rw()
     entries, _ = r.get_filters()                # [(nombre, mac)] bloqueados
     blocked = {m: n for n, m in entries}
-    live = scan_devices(HOST)                      # {mac: (ip, hostname)}
+    live = scan_devices(HOST)                      # {mac: ip}
     custom = load_names()
     out = []
-    for mac, (ip, hostname) in live.items():
+    for mac, ip in live.items():
         out.append({"mac": mac, "ip": ip, "router": "sagemcom",
-                    "name": custom.get(mac) or blocked.get(mac) or hostname or ip,
+                    "name": custom.get(mac) or blocked.get(mac, ip),
                     "active": True, "blocked": mac in blocked})
     for mac, name in blocked.items():              # bloqueados aunque estén offline
         if mac not in live:
