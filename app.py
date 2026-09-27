@@ -5,6 +5,7 @@ el bloqueo usa la página "Filtro MAC" en modo DENEGAR.
 
 Uso:  python app.py   ->  http://localhost:8000
 """
+import json
 import os
 
 from dotenv import load_dotenv
@@ -19,6 +20,20 @@ HOST = os.getenv("ROUTER_HOST", "192.168.0.1")
 USER = os.getenv("ROUTER_USER", "user")
 PASSWORD = os.getenv("ROUTER_PASS", "")
 PORT = int(os.getenv("PORT", "8000"))
+NAMES_FILE = os.path.join(os.path.dirname(__file__), "names.json")
+
+
+def load_names() -> dict:
+    try:
+        with open(NAMES_FILE) as f:
+            return {norm_mac(k): v for k, v in json.load(f).items()}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_names(names: dict):
+    with open(NAMES_FILE, "w") as f:
+        json.dump(names, f, indent=2, ensure_ascii=False)
 
 
 def rw() -> RouterWeb:
@@ -38,17 +53,31 @@ def devices():
     entries = r.get_filters()                      # [(nombre, mac)] bloqueados
     blocked = {m: n for n, m in entries}
     live = scan_devices(HOST)                      # {mac: ip}
+    custom = load_names()
     out = []
     for mac, ip in live.items():
         out.append({"mac": mac, "ip": ip,
-                    "name": blocked.get(mac, ip),
+                    "name": custom.get(mac) or blocked.get(mac, ip),
                     "active": True, "blocked": mac in blocked})
     for mac, name in blocked.items():              # bloqueados aunque estén offline
         if mac not in live:
-            out.append({"mac": mac, "ip": "", "name": name,
+            out.append({"mac": mac, "ip": "", "name": custom.get(mac, name),
                         "active": False, "blocked": True})
     out.sort(key=lambda x: (not x["blocked"], not x["active"], x["name"].lower()))
     return out
+
+
+@app.post("/api/name/{mac}")
+def set_name(mac: str, payload: dict):
+    mac = norm_mac(mac)
+    name = (payload.get("name") or "").strip()
+    names = load_names()
+    if name:
+        names[mac] = name
+    else:
+        names.pop(mac, None)
+    save_names(names)
+    return {"mac": mac, "name": name}
 
 
 @app.post("/api/block/{mac}")
@@ -109,7 +138,8 @@ box-shadow:0 6px 20px rgba(0,0,0,.35);animation:pop .25s ease}
 .icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:24px;
 background:#0e1428;flex-shrink:0;border:1px solid #232c4e}
 .info{flex:1;min-width:0}
-.name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.name:active{opacity:.7}
 .meta{font-size:11.5px;color:var(--mut);font-family:ui-monospace,monospace;margin-top:3px}
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-top:6px;letter-spacing:.4px}
 .tag.on{background:rgba(47,214,113,.15);color:var(--green)}
@@ -173,7 +203,7 @@ document.getElementById('sOff').textContent=off;
 document.getElementById('list').innerHTML=devs.length?devs.map(d=>`
 <div class="card ${d.blocked?'blocked':''}">
 <div class="icon">${icon(d.name)}</div>
-<div class="info"><div class="name">${d.name}</div>
+<div class="info"><div class="name" onclick="rename('${d.mac}','${d.name.replace(/'/g,"\\'")}')" title="Toca para renombrar">✏️ ${d.name}</div>
 <div class="meta">${d.mac}<br>${d.ip||'sin IP'}</div>
 <span class="tag ${d.blocked?'off':(d.active?'on':'idle')}">${d.blocked?'⛔ BLOQUEADO':(d.active?'● EN LÍNEA':'○ INACTIVO')}</span></div>
 <label class="switch" title="Internet"><input type="checkbox" ${d.blocked?'':'checked'}
@@ -185,6 +215,13 @@ el.disabled=true;
 const r=await fetch('/api/'+(allowed?'unblock/':'block/')+encodeURIComponent(mac),{method:'POST'});
 if(!r.ok){alert('Error: '+await r.text());el.disabled=false;el.checked=!allowed;return;}
 load();
+}
+async function rename(mac,current){
+const name=prompt('Nombre para este dispositivo:',current);
+if(name===null)return;
+const r=await fetch('/api/name/'+encodeURIComponent(mac),{method:'POST',
+headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+if(!r.ok)alert('Error: '+await r.text());load();
 }
 load();
 </script></body></html>"""
