@@ -89,14 +89,18 @@ def devices():
                         "active": False, "blocked": True})
     # Dispositivos del TP-Link (filtro MAC)
     try:
+        seen = {norm_mac(x["mac"]) for x in out}
         for d in tplink_devices():
-            if d["mac"] not in [x["mac"] for x in out]:
+            nm = norm_mac(d["mac"])
+            if nm not in seen:
                 out.append(d)
+                seen.add(nm)
             else:
                 for x in out:
-                    if x["mac"] == d["mac"]:
+                    if norm_mac(x["mac"]) == nm:
                         x["router"] = "tplink"
                         x["blocked"] = d["blocked"]
+                        x["name"] = d["name"] if d["name"] != d["mac"] else x["name"]
     except HTTPException:
         pass  # sin sesion TP-Link, solo Sagemcom
     out.sort(key=lambda x: (not x["blocked"], not x["active"], x["name"].lower()))
