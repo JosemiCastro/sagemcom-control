@@ -15,12 +15,16 @@ from fastapi.responses import HTMLResponse
 load_dotenv()
 
 from router_web import RouterWeb, norm_mac, scan_devices  # noqa: E402
+from tplink import TPLinkWeb  # noqa: E402
 
 HOST = os.getenv("ROUTER_HOST", "192.168.0.1")
 USER = os.getenv("ROUTER_USER", "user")
 PASSWORD = os.getenv("ROUTER_PASS", "")
 PORT = int(os.getenv("PORT", "8000"))
 NAMES_FILE = os.path.join(os.path.dirname(__file__), "names.json")
+TPLINK_HOST = os.getenv("TPLINK_HOST", "192.168.0.2")
+TPLINK_SESSION_FILE = os.path.join(os.path.dirname(__file__),
+                                   "tplink_session.json")
 
 
 def load_names() -> dict:
@@ -44,6 +48,25 @@ def rw() -> RouterWeb:
     return r
 
 
+def tp() -> TPLinkWeb:
+    """TP-Link con la sesion importada del navegador."""
+    try:
+        with open(TPLINK_SESSION_FILE) as f:
+            s = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        raise HTTPException(500, "Sin sesion TP-Link: importala desde /api/tplink/session")
+    t = TPLinkWeb(TPLINK_HOST)
+    t.import_browser_session(s["session_id"], s["aes"], s["seq"],
+                             s["hash"], s["rsa"])
+    return t
+
+
+def save_tplink_session(session_id, aes, seq, hash_hex, rsa):
+    with open(TPLINK_SESSION_FILE, "w") as f:
+        json.dump({"session_id": session_id, "aes": aes, "seq": seq,
+                   "hash": hash_hex, "rsa": rsa}, f)
+
+
 app = FastAPI(title="Sagemcom Control")
 
 
@@ -56,13 +79,26 @@ def devices():
     custom = load_names()
     out = []
     for mac, ip in live.items():
-        out.append({"mac": mac, "ip": ip,
+        out.append({"mac": mac, "ip": ip, "router": "sagemcom",
                     "name": custom.get(mac) or blocked.get(mac, ip),
                     "active": True, "blocked": mac in blocked})
     for mac, name in blocked.items():              # bloqueados aunque estén offline
         if mac not in live:
-            out.append({"mac": mac, "ip": "", "name": custom.get(mac, name),
+            out.append({"mac": mac, "ip": "", "router": "sagemcom",
+                        "name": custom.get(mac, name),
                         "active": False, "blocked": True})
+    # Dispositivos del TP-Link (filtro MAC)
+    try:
+        for d in tplink_devices():
+            if d["mac"] not in [x["mac"] for x in out]:
+                out.append(d)
+            else:
+                for x in out:
+                    if x["mac"] == d["mac"]:
+                        x["router"] = "tplink"
+                        x["blocked"] = d["blocked"]
+    except HTTPException:
+        pass  # sin sesion TP-Link, solo Sagemcom
     out.sort(key=lambda x: (not x["blocked"], not x["active"], x["name"].lower()))
     return out
 
@@ -99,6 +135,47 @@ def unblock(mac: str):
     entries = [(n, m) for n, m in entries if m != mac]
     r.set_filters(entries, page_key)
     return {"mac": mac, "blocked": False}
+
+
+# ---------- TP-Link ----------
+@app.post("/api/tplink/session")
+def tplink_session(payload: dict):
+    """Importa la sesion del navegador (5 valores de localStorage + URL)."""
+    save_tplink_session(payload["session_id"], payload["aes"], payload["seq"],
+                        payload["hash"], payload["rsa"])
+    f = tp().get_mac_filter()
+    return {"ok": True, "entries": len(f["entries"])}
+
+
+@app.get("/api/tplink/devices")
+def tplink_devices():
+    t = tp()
+    f = t.get_mac_filter()
+    custom = load_names()
+    out = []
+    for e in f["entries"]:
+        mac = norm_mac(e["mac"])
+        out.append({"mac": e["mac"], "ip": "", "router": "tplink",
+                    "name": custom.get(mac) or e["desc"] or e["mac"],
+                    "active": True, "blocked": e["enabled"]})
+    return out
+
+
+@app.post("/api/tplink/block/{mac}")
+def tplink_block(mac: str, payload: dict = None):
+    mac = norm_mac(mac)
+    desc = (payload or {}).get("desc", "")
+    t = tp()
+    t.set_mac_block(mac, block=True, desc=desc)
+    return {"mac": mac, "blocked": True, "router": "tplink"}
+
+
+@app.post("/api/tplink/unblock/{mac}")
+def tplink_unblock(mac: str):
+    mac = norm_mac(mac)
+    t = tp()
+    t.set_mac_block(mac, block=False)
+    return {"mac": mac, "blocked": False, "router": "tplink"}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -205,15 +282,16 @@ document.getElementById('list').innerHTML=devs.length?devs.map(d=>`
 <div class="card ${d.blocked?'blocked':''}">
 <div class="icon">${icon(d.name)}</div>
 <div class="info"><div class="name" onclick="rename('${d.mac}','${d.name.replace(/'/g,"\\'")}')" title="Toca para renombrar">✏️ ${d.name}</div>
-<div class="meta">${d.mac}<br>${d.ip||'sin IP'}</div>
+<div class="meta">${d.mac}<br>${d.ip||'sin IP'}${d.router==='tplink'?' · TP-Link':''}</div>
 <span class="tag ${d.blocked?'off':(d.active?'on':'idle')}">${d.blocked?'⛔ BLOQUEADO':(d.active?'● EN LÍNEA':'○ INACTIVO')}</span></div>
 <label class="switch" title="Internet"><input type="checkbox" ${d.blocked?'':'checked'}
-onchange="toggle('${d.mac}',this.checked,this)"><span class="sl"></span></label>
+onchange="toggle('${d.mac}',this.checked,this,'${d.router||'sagemcom'}')"><span class="sl"></span></label>
 </div>`).join(''):'<div class="empty">Sin resultados 🔍</div>';
 }
-async function toggle(mac,allowed,el){
+async function toggle(mac,allowed,el,router){
 el.disabled=true;
-const r=await fetch('/api/'+(allowed?'unblock/':'block/')+encodeURIComponent(mac),{method:'POST'});
+const base=router==='tplink'?'/api/tplink/':'/api/';
+const r=await fetch(base+(allowed?'unblock/':'block/')+encodeURIComponent(mac),{method:'POST'});
 if(!r.ok){alert('Error: '+await r.text());el.disabled=false;el.checked=!allowed;return;}
 load();
 }

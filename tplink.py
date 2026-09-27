@@ -254,7 +254,6 @@ class TPLinkWeb:
         # El router precarga wlanFilterAdvPara con los valores del formulario;
         # SelIndex indica donde va la entrada nueva (no tocarlo).
         para = self.encrypted_vars(html).get("wlanFilterAdvPara", [])
-        print("DEBUG para:", para)
 
         def p(i, default=""):
             return str(para[i]) if len(para) > i else default
@@ -274,8 +273,4 @@ class TPLinkWeb:
         if fields["Type"] in ("3", "4", "5"):
             fields["key"] = p(3)
         r = self.post_form("WlanMacFilterRpm.htm", fields)
-        print("DEBUG post alta:", r.status_code, len(r.text))
-        with open("wlanmacadd_resp.htm", "w", encoding="utf-8",
-                  errors="replace") as f:
-            f.write(r.text)
         return self.get_mac_filter()

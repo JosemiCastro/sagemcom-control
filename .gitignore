@@ -2,3 +2,5 @@
 blocked.json
 __pycache__/
 .venv/
+tplink_session.json
+names.json
