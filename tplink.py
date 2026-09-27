@@ -251,23 +251,24 @@ class TPLinkWeb:
         html = self.post_form(
             "WlanMacFilterRpm.htm",
             {"Add": "Add", "Page": 1, "vapIdx": 1}).text
-        names = re.findall(r'name="([^"]+)"', html)
-        fields = {}
-        for n in dict.fromkeys(names):
-            m = re.search(
-                r'name="' + re.escape(n) + r'"[^>]*value="([^"]*)"', html)
-            fields[n] = m.group(1) if m else ""
-        for k in fields:
-            kl = k.lower()
-            if "mac" in kl:
-                fields[k] = mac
-            elif "desc" in kl:
-                fields[k] = desc
-            elif "status" in kl or "type" in kl or "enable" in kl:
-                fields[k] = "1"
-        if "Changed" in fields:
-            fields["Changed"] = "1"
-        if "Save" not in fields:
-            fields["Save"] = "Save"
+        # El router precarga wlanFilterAdvPara con los valores del formulario;
+        # SelIndex indica donde va la entrada nueva (no tocarlo).
+        para = self.encrypted_vars(html).get("wlanFilterAdvPara", [])
+
+        def p(i, default=""):
+            return str(para[i]) if len(para) > i else default
+
+        fields = {
+            "Mac": mac,
+            "Desc": desc,
+            "Type": p(2, "1"),
+            "key": p(3),
+            "entryEnabled": "1",
+            "Changed": "1",
+            "SelIndex": p(6),
+            "Page": p(7, "1"),
+            "vapIdx": p(8, "1"),
+            "Save": "Save",
+        }
         self.post_form("WlanMacFilterRpm.htm", fields)
         return self.get_mac_filter()
