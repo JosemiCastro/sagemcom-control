@@ -84,9 +84,10 @@ class TPLinkWeb:
         self.rsa = RSA.construct((int(nn, 16), int(mm, 16)))
         self._gen_aes_key()
         self.hash = hashlib.md5((self.user + self.password).encode()).hexdigest()
-        data = json.dumps({"name": self.user, "password": self.password})
+        data = json.dumps({"name": self.user, "password": self.password},
+                          separators=(",", ":"))
         payload = self._data_encrypt(data, is_login=True)
-        body = "JSONDATA: " + json.dumps(payload) + "\n"
+        body = "JSONDATA: " + json.dumps(payload, separators=(",", ":")) + "\n"
         r = self.s.post(
             f"http://{self.host}/login/login.json",
             data=body,
@@ -124,7 +125,8 @@ class TPLinkWeb:
         )
         payload = self._data_encrypt(plain)
         r = self.s.post(self._url(page),
-                        files={"data": (None, json.dumps(payload))},
+                        files={"data": (None, json.dumps(payload,
+                                                         separators=(",", ":")))},
                         timeout=15)
         return r
 
