@@ -259,6 +259,10 @@ background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 6px 24px 
 <div class="pill ko"><b id="sOff">–</b><span>bloqueados</span></div>
 </div></header>
 <div class="search"><input id="q" placeholder="Buscar dispositivo…" oninput="render()"></div>
+<div class="search" style="display:flex;gap:8px">
+<input id="manualMac" placeholder="MAC manual (ej. E0:9D:31:E7:75:B6)" style="flex:1">
+<button onclick="blockManual()" style="background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:0;border-radius:14px;padding:13px 18px;font-weight:700;cursor:pointer">⛔ Bloquear</button>
+</div>
 <div id="list"><div class="spin">Buscando dispositivos en la red… ⏳</div></div>
 <div class="refresh"><button onclick="load()">↻ Actualizar</button></div>
 <script>
@@ -310,6 +314,14 @@ if(name===null)return;
 const r=await fetch('/api/name/'+encodeURIComponent(mac),{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
 if(!r.ok)alert('Error: '+await r.text());load();
+}
+async function blockManual(){
+const mac=document.getElementById('manualMac').value.trim();
+if(!mac){alert('Escribe una MAC');return;}
+const r=await fetch('/api/block/'+encodeURIComponent(mac),{method:'POST'});
+if(!r.ok){alert('Error: '+await r.text());return;}
+document.getElementById('manualMac').value='';
+load();
 }
 load();
 </script></body></html>"""
