@@ -1,11 +1,12 @@
 # Sagemcom Control
 
-App local para ver los dispositivos conectados a tu Sagemcom F@st 3686
-y **encender/apagar su acceso a internet por MAC**, a tu antojo.
+App local para ver los dispositivos de tu red y
+**encender/apagar su acceso a internet por MAC**, a tu antojo.
 
-Funciona con la API interna del router (librería `python-sagemcom-api`),
-la misma que usa su panel web. **Se ejecuta en tu red local**:
-el router (192.168.0.1) solo es accesible desde casa.
+Habla directamente con la web de tu Sagemcom F@st 3686 (firmware Vodafone/ONO):
+el bloqueo usa la página **Filtro MAC en modo DENEGAR**, igual que si lo
+hicieras a mano en http://192.168.0.1. **Se ejecuta en tu red local**:
+el router solo es accesible desde casa.
 
 ## Requisitos
 
@@ -13,51 +14,35 @@ el router (192.168.0.1) solo es accesible desde casa.
 - Estar conectado a la red del Sagemcom
 - Usuario y contraseña del router (los de la pegatina: `user` + clave)
 
-## Instalación
+## Instalación (Windows PowerShell)
 
-```bash
+```powershell
 cd sagemcom-control
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-# edita .env con tus datos
+copy .env.example .env
+notepad .env   # rellena ROUTER_PASS con tu clave
 ```
 
-## Paso 0 — Descubrir el parámetro de bloqueo (solo una vez)
+## Probar la conexión (recomendado)
 
-Cada firmware expone el bloqueo en un parámetro distinto. Este script
-busca candidatos en el modelo de datos del router:
-
-```bash
-python discover.py
+```powershell
+python test_login.py
 ```
 
-Te mostrará ramas como `Device.WiFi...`, `Device.X_SAGEMCOM...` con
-pistas (Parental, MACFilter, Block...). Busca un parámetro que sea
-una **lista de MACs** (modo denegar) o un **flag por dispositivo**.
-
-Cuando lo encuentres, ponlo en `.env`:
-
-```ini
-# Ejemplo (ajusta a lo que devuelva discover.py en tu firmware):
-BLOCK_LIST_XPATH=Device.WiFi.AccessPoint.1.X_SAGEMCOM_MACFilter.DenyList
-BLOCK_LIST_SEP=,
-```
-
-Si tu firmware no expone ningún parámetro escribible para bloqueo,
-el listado de dispositivos seguirá funcionando y el script te lo dirá.
+Debe mostrar `OK login` y la lista actual del filtro MAC del router.
 
 ## Uso
 
-```bash
+```powershell
 python app.py
 ```
 
 Abre http://localhost:8000 en el móvil o PC (conectado a tu wifi).
-Verás los dispositivos con su MAC, IP y nombre, y un interruptor
-para cortarles / devolverles internet.
+La app hace un barrido de la red, muestra cada dispositivo con su MAC e IP,
+y un interruptor para cortarle / devolverle internet.
 
-El estado de bloqueados se guarda en `blocked.json`.
+Los bloqueados aparecen también aunque estén apagados, para poder
+desbloquearlos después.
 
 ## Docker (opcional)
 
