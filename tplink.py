@@ -263,14 +263,16 @@ class TPLinkWeb:
             "Mac": mac,
             "Desc": desc,
             "Type": p(2, "1"),
-            "key": p(3),
             "entryEnabled": "1",
-            "Changed": "1",
+            "Changed": p(5, "0"),
             "SelIndex": p(6),
             "Page": p(7, "1"),
             "vapIdx": p(8, "1"),
             "Save": "Save",
         }
+        # key solo si Type es 64/128/152 bit (el navegador lo omite si disabled)
+        if fields["Type"] in ("3", "4", "5"):
+            fields["key"] = p(3)
         r = self.post_form("WlanMacFilterRpm.htm", fields)
         print("DEBUG post alta:", r.status_code, len(r.text))
         with open("wlanmacadd_resp.htm", "w", encoding="utf-8",
