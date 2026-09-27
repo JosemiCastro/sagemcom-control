@@ -169,3 +169,84 @@ class TPLinkWeb:
             except Exception as e:  # noqa: BLE001
                 out[name] = f"<error: {e}>"
         return out
+
+    # ---------- Filtro MAC wifi ----------
+    def get_mac_filter(self):
+        """Lee el estado del filtro MAC wifi.
+
+        Devuelve dict(enabled: bool, rule: 'deny'|'allow', entries: [...]).
+        Cada entry: dict(id, mac, enabled, desc).
+        """
+        html = self.get_page("WlanMacFilterRpm.htm")
+        varlist = self.encrypted_vars(html)
+        para = varlist.get("wlanFilterPara", [])
+        raw = varlist.get("wlanFilterList", [])
+        stride = para[6] if len(para) > 6 else 5
+        n = para[5] if len(para) > 5 else 0
+        entries = []
+        for i in range(n):
+            row = i * stride
+            if row + 4 >= len(raw):
+                break
+            entries.append({
+                "id": i,
+                "mac": str(raw[row]).upper(),
+                "enabled": str(raw[row + 1]) == "1",
+                "desc": str(raw[row + 4]),
+            })
+        return {
+            "enabled": bool(para and para[0] == 1),
+            "rule": "deny" if not para or para[1] == 0 else "allow",
+            "entries": entries,
+        }
+
+    def mac_filter_action(self, query):
+        """Ejecuta una accion del filtro (Del, DoAll, Enfilter...).
+
+        query: ej. "Page=1&Del=0&vapIdx=1". Devuelve el filtro actualizado.
+        """
+        self.post_encrypted("WlanMacFilterRpm.htm", query)
+        return self.get_mac_filter()
+
+    def set_mac_block(self, mac, block=True, desc=""):
+        """Bloquea (block=True) o desbloquea (block=False) una MAC."""
+        mac = mac.upper().replace(":", "-")
+        f = self.get_mac_filter()
+        entry = next((e for e in f["entries"] if e["mac"] == mac), None)
+        if entry:
+            if entry["enabled"] == block:
+                return f  # ya esta como se pide
+            self.mac_filter_action(f"Page=1&Del={entry['id']}&vapIdx=1")
+            if block:
+                return self.add_mac_entry(mac, desc or entry["desc"])
+            return self.get_mac_filter()
+        if block:
+            return self.add_mac_entry(mac, desc)
+        return f
+
+    def add_mac_entry(self, mac, desc=""):
+        """Crea una entrada en el filtro (habilitada)."""
+        mac = mac.upper().replace(":", "-")
+        html = self.post_encrypted(
+            "WlanMacFilterRpm.htm", "Add=Add&Page=1&vapIdx=1").text
+        names = re.findall(r'name="([^"]+)"', html)
+        fields = {}
+        for n in dict.fromkeys(names):
+            m = re.search(
+                r'name="' + re.escape(n) + r'"[^>]*value="([^"]*)"', html)
+            fields[n] = m.group(1) if m else ""
+        for k in fields:
+            kl = k.lower()
+            if "mac" in kl:
+                fields[k] = mac
+            elif "desc" in kl:
+                fields[k] = desc
+            elif "status" in kl or "type" in kl or "enable" in kl:
+                fields[k] = "1"
+        if "Changed" in fields:
+            fields["Changed"] = "1"
+        if "Save" not in fields:
+            fields["Save"] = "Save"
+        query = urllib.parse.urlencode(fields)
+        self.post_encrypted("WlanMacFilterRpm.htm", query)
+        return self.get_mac_filter()
