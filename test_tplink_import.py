@@ -24,6 +24,9 @@ print("OK sesion importada")
 
 html = tp.get_page("WlanMacFilterRpm.htm")
 print("pagina:", len(html), "bytes")
+with open("wlanmacfilter.htm", "w", encoding="utf-8", errors="replace") as f:
+    f.write(html)
+print("guardada en wlanmacfilter.htm")
 
 print("=== campos del formulario ===")
 for m in re.finditer(r'<input[^>]*name="([^"]+)"[^>]*>', html):
