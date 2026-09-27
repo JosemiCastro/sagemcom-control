@@ -52,18 +52,18 @@ class RouterWeb:
         raise RuntimeError(f"El router no responde tras varios intentos: {last}")
 
     def _page_key(self, html: str):
-        """Busca un sessionKey pre-login en el HTML de la página de entrada."""
-        for pat in (r"sessionKey=(\d+)", r"sessionKey[\"']?\s*[:=]\s*[\"']?(\d+)",
-                    r"var\s+sessionKey\s*=\s*[\"']?(\d+)"):
-            m = re.search(pat, html or "")
-            if m:
-                return m.group(1)
-        return None
+        """Busca el SessionKey en el HTML (var SessionKey=NNNNN)."""
+        m = re.search(r"SessionKey\s*=\s*[\"']?(\d+)", html or "", re.IGNORECASE)
+        return m.group(1) if m else None
 
     def login(self) -> str:
-        # 1. La página de login ya trae (o no) un sessionKey previo
+        # 1. La página de login trae el SessionKey en su HTML
         r = self._req("GET", self.base + "/login.asp")
-        pre_key = self._page_key(r.text) or str(random.randint(100000000, 999999999))
+        pre_key = self._page_key(r.text)
+        if not pre_key:
+            raise RuntimeError(
+                "No se encontró el SessionKey en la página de login. "
+                "El firmware puede haber cambiado.")
 
         # 2. POST de credenciales con ese sessionKey
         r = self._req(
