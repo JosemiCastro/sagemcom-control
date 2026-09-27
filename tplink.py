@@ -25,6 +25,7 @@ class TPLinkWeb:
         self.s = requests.Session()
         self.s.headers["User-Agent"] = "Mozilla/5.0"
         self.s.headers["Referer"] = f"http://{host}/"
+        self.s.headers["Origin"] = f"http://{host}"
         self.aes_key = None
         self.aes_iv = None
         self.hash = None
@@ -111,6 +112,29 @@ class TPLinkWeb:
 
     def _url(self, page):
         return f"http://{self.host}/{self.session_id}/userRpm/{page}"
+
+    def import_browser_session(self, session_id, aes_string, seq, hash_hex,
+                               rsa_nn, rsa_ee):
+        """Reutiliza una sesion iniciada en el navegador.
+
+        Valores desde devtools (con la sesion iniciada):
+          session_id = token de la URL (ej. AYQVHBCAPGABTWSC)
+          aes_string = localStorage 'encryptorAES'  ("key=...&iv=...")
+          seq        = localStorage 'encryptorSeq'
+          hash_hex   = localStorage 'encryptorHash' (MD5 simple, tal cual)
+          rsa_nn/ee  = localStorage 'encryptorRsa'  ("nn=...&ee=...")
+        """
+        self.session_id = session_id
+        self.aes_key = aes_string.split("&")[0].split("=", 1)[1]
+        self.aes_iv = aes_string.split("&")[1].split("=", 1)[1]
+        self.seq = int(seq)
+        self.hash = hash_hex
+        nn = rsa_nn.split("&")[0].split("=", 1)[1]
+        ee = rsa_nn.split("&")[1].split("=", 1)[1]
+        self.rsa = RSA.construct((int(nn, 16), int(ee, 16)))
+        self.s.cookies.set("Authorization", str(self.seq),
+                           domain=self.host, path="/")
+        return True
 
     def get_page(self, page):
         r = self.s.get(self._url(page), timeout=15)
