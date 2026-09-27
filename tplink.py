@@ -116,7 +116,7 @@ class TPLinkWeb:
         return f"http://{self.host}/{self.session_id}/userRpm/{page}"
 
     def import_browser_session(self, session_id, aes_string, seq, hash_hex,
-                               rsa_nn, rsa_ee):
+                               rsa_string):
         """Reutiliza una sesion iniciada en el navegador.
 
         Valores desde devtools (con la sesion iniciada):
@@ -124,15 +124,15 @@ class TPLinkWeb:
           aes_string = localStorage 'encryptorAES'  ("key=...&iv=...")
           seq        = localStorage 'encryptorSeq'
           hash_hex   = localStorage 'encryptorHash' (MD5 simple, tal cual)
-          rsa_nn/ee  = localStorage 'encryptorRsa'  ("nn=...&ee=...")
+          rsa_string = localStorage 'encryptorRsa'  ("nn=...&ee=...")
         """
         self.session_id = session_id
         self.aes_key = aes_string.split("&")[0].split("=", 1)[1]
         self.aes_iv = aes_string.split("&")[1].split("=", 1)[1]
         self.seq = int(seq)
         self.hash = hash_hex
-        nn = rsa_nn.split("&")[0].split("=", 1)[1]
-        ee = rsa_nn.split("&")[1].split("=", 1)[1]
+        nn = rsa_string.split("&")[0].split("=", 1)[1]
+        ee = rsa_string.split("&")[1].split("=", 1)[1]
         self.rsa = RSA.construct((int(nn, 16), int(ee, 16)))
         self.s.cookies.set("Authorization", str(self.seq),
                            domain=self.host, path="/")
