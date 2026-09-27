@@ -70,6 +70,12 @@ class TPLinkWeb:
     # ---------------- sesion ----------------
     def login(self):
         r = self.s.get(f"http://{self.host}/login/getRsa.json", timeout=10)
+        if "json" not in r.headers.get("Content-Type", ""):
+            raise RuntimeError(
+                f"getRsa.json no devolvio JSON: HTTP {r.status_code}, "
+                f"Content-Type={r.headers.get('Content-Type')}, "
+                f"cuerpo={r.text[:200]!r}"
+            )
         info = r.json()
         nn, mm = info["rsa"]["nn"], info["rsa"]["mm"]
         self.seq = int(info["seq"])
