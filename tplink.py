@@ -179,7 +179,7 @@ class TPLinkWeb:
         """
         html = self.get_page("WlanMacFilterRpm.htm")
         varlist = self.encrypted_vars(html)
-        para = varlist.get("wlanFilterPara", [])
+        para = [int(x) for x in varlist.get("wlanFilterPara", [])]
         raw = varlist.get("wlanFilterList", [])
         stride = para[6] if len(para) > 6 else 5
         n = para[5] if len(para) > 5 else 0
