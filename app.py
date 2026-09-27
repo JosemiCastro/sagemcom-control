@@ -1,4 +1,4 @@
-"""Sagemcom Control — enciende/apaga el acceso a internet por MAC.
+"""Router Control — enciende/apaga el acceso a internet por MAC.
 
 Habla directamente con la web del router (sin API interna):
 el bloqueo usa la página "Filtro MAC" en modo DENEGAR.
@@ -67,7 +67,7 @@ def save_tplink_session(session_id, aes, seq, hash_hex, rsa):
                    "hash": hash_hex, "rsa": rsa}, f)
 
 
-app = FastAPI(title="Sagemcom Control")
+app = FastAPI(title="Router Control")
 
 
 @app.get("/api/devices")
@@ -197,7 +197,7 @@ def index():
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f1a">
-<title>Sagemcom Control</title>
+<title>Router Control</title>
 <style>
 :root{--bg:#0b0f1a;--card:#151b2e;--card2:#1b2340;--txt:#f2f4fa;--mut:#8b93b0;
 --green:#2fd671;--red:#ff5a5a;--acc:#5b8cff;--acc2:#8b5bff}
@@ -255,7 +255,7 @@ background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 6px 24px 
 @keyframes blink{50%{opacity:.4}}
 </style></head><body>
 <header>
-<h1><span class="logo">📡</span>Sagemcom Control</h1>
+<h1><span class="logo">📡</span>Router Control</h1>
 <div class="sub">Toca el interruptor para dar o quitar internet a cada dispositivo</div>
 <div class="stats">
 <div class="pill tot"><b id="sTot">–</b><span>dispositivos</span></div>
