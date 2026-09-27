@@ -71,6 +71,8 @@ class TPLinkWeb:
 
     # ---------------- sesion ----------------
     def login(self):
+        # 0. Cargar la pagina de login como el navegador (puede fijar cookies)
+        self.s.get(f"http://{self.host}/", timeout=10)
         r = self.s.get(f"http://{self.host}/login/getRsa.json", timeout=10)
         try:
             info = r.json()
